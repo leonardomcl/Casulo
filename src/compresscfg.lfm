@@ -1,0 +1,56 @@
+object FConfigCprsAlgo: TFConfigCprsAlgo
+  Left = 678
+  Height = 224
+  Top = 231
+  Width = 379
+  BorderIcons = [biSystemMenu]
+  BorderStyle = bsToolWindow
+  Caption = 'Compact Algorithm (WIN/LINUX)'
+  ClientHeight = 224
+  ClientWidth = 379
+  PopupMode = pmAuto
+  Position = poDesktopCenter
+  LCLVersion = '4.8.0.0'
+  OnClose = FormClose
+  object RbCompressModeB: TRadioButton
+    Left = 10
+    Height = 29
+    Top = 56
+    Width = 92
+    Caption = 'Brotli'
+    Checked = True
+    Font.Height = -19
+    Font.Name = 'Source Code Pro'
+    Font.Style = [fsBold]
+    ParentFont = False
+    TabOrder = 0
+    TabStop = True
+  end
+  object RbCompressModeZ: TRadioButton
+    Left = 10
+    Height = 29
+    Top = 110
+    Width = 70
+    Caption = 'ZSTD'
+    Font.Height = -19
+    Font.Name = 'Source Code Pro'
+    Font.Style = [fsBold]
+    ParentFont = False
+    TabOrder = 1
+  end
+  object CBStripStub: TCheckBox
+    Left = 10
+    Height = 25
+    Top = 179
+    Width = 369
+    Align = alBottom
+    BorderSpacing.Left = 10
+    BorderSpacing.Bottom = 20
+    Caption = 'STRIP STUB'
+    Font.Height = -16
+    Font.Name = 'Source Code Pro'
+    Font.Style = [fsBold]
+    ParentFont = False
+    TabOrder = 2
+  end
+end

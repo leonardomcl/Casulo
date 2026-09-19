@@ -1,0 +1,56 @@
+object FTargetLinux: TFTargetLinux
+  Left = 773
+  Height = 217
+  Top = 263
+  Width = 311
+  BorderIcons = [biSystemMenu]
+  BorderStyle = bsToolWindow
+  Caption = 'Linux Target'
+  ClientHeight = 217
+  ClientWidth = 311
+  PopupMode = pmAuto
+  Position = poDesktopCenter
+  LCLVersion = '4.8.0.0'
+  OnClose = FormClose
+  object StatusBar1: TStatusBar
+    Left = 0
+    Height = 21
+    Top = 196
+    Width = 311
+    Panels = <>
+  end
+  object RbMusl: TRadioButton
+    Left = 10
+    Height = 26
+    Top = 106
+    Width = 291
+    Align = alTop
+    BorderSpacing.Left = 10
+    BorderSpacing.Top = 40
+    BorderSpacing.Right = 10
+    Caption = 'x86_64-unknown-linux-musl'
+    Font.Height = -17
+    Font.Name = 'Source Code Pro'
+    Font.Style = [fsBold]
+    ParentFont = False
+    TabOrder = 1
+  end
+  object RBGnu: TRadioButton
+    Left = 10
+    Height = 26
+    Top = 40
+    Width = 291
+    Align = alTop
+    BorderSpacing.Left = 10
+    BorderSpacing.Top = 40
+    BorderSpacing.Right = 10
+    Caption = 'x86_64-unknown-linux-gnu'
+    Checked = True
+    Font.Height = -17
+    Font.Name = 'Source Code Pro'
+    Font.Style = [fsBold]
+    ParentFont = False
+    TabOrder = 2
+    TabStop = True
+  end
+end

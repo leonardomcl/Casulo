@@ -1,0 +1,25 @@
+[package]
+name = "stub"
+version = "0.3.0"
+edition = "2024"
+rust-version = "1.96"
+build = "build.rs"
+
+[dependencies]
+aes = { version = "0.9.3", default-features = false }
+cbc = { version = "0.2.1", default-features = false, features = ["block-padding"] }
+sha2 = { version = "0.11.0", default-features = false }
+hmac = { version = "0.13.0", default-features = false }
+hkdf = { version = "0.13.0", default-features = false }
+
+@@@ALGORITHM_MODE@@@
+
+[profile.release]
+opt-level = @@OPT_LEVEL@@
+lto = @@LTO_CFG@@
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
+debug-assertions = false
+overflow-checks = false

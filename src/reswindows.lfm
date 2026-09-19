@@ -1,0 +1,286 @@
+object FResWindows: TFResWindows
+  Left = 653
+  Height = 580
+  Top = 176
+  Width = 678
+  BorderIcons = [biSystemMenu]
+  BorderStyle = bsToolWindow
+  Caption = 'Resources Windows'
+  ClientHeight = 580
+  ClientWidth = 678
+  Font.Height = -13
+  Font.Name = 'Source Code Pro'
+  PopupMode = pmAuto
+  Position = poDesktopCenter
+  LCLVersion = '4.8.0.0'
+  OnShow = FormShow
+  object StatusBar1: TStatusBar
+    Left = 0
+    Height = 21
+    Top = 559
+    Width = 678
+    Panels = <>
+  end
+  object PageControl1: TPageControl
+    Left = 4
+    Height = 551
+    Top = 4
+    Width = 670
+    ActivePage = TabSheet1
+    Align = alClient
+    BorderSpacing.Left = 4
+    BorderSpacing.Top = 4
+    BorderSpacing.Right = 4
+    BorderSpacing.Bottom = 4
+    TabIndex = 0
+    TabOrder = 1
+    object TabSheet1: TTabSheet
+      Caption = 'Resource Info'
+      ClientHeight = 520
+      ClientWidth = 660
+      object EdtCompanyName: TLabeledEdit
+        Left = 152
+        Height = 39
+        Top = 16
+        Width = 496
+        BorderSpacing.Around = 2
+        BorderSpacing.InnerBorder = 5
+        Color = clBtnShadow
+        EditLabel.Height = 39
+        EditLabel.Width = 104
+        EditLabel.Caption = 'Company Name:'
+        Font.Color = clSkyBlue
+        Font.Height = -13
+        Font.Name = 'Source Code Pro'
+        LabelPosition = lpLeft
+        ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 0
+        TextHint = 'CompanyName'
+      end
+      object EdtFileDescription: TLabeledEdit
+        Left = 152
+        Height = 39
+        Top = 72
+        Width = 496
+        BorderSpacing.Around = 2
+        BorderSpacing.InnerBorder = 5
+        Color = clBtnShadow
+        EditLabel.Height = 39
+        EditLabel.Width = 136
+        EditLabel.Caption = 'File Description:'
+        Font.Color = clSkyBlue
+        Font.Height = -13
+        Font.Name = 'Source Code Pro'
+        LabelPosition = lpLeft
+        ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 1
+        TextHint = 'FileDescription'
+      end
+      object EdtProductName: TLabeledEdit
+        Left = 152
+        Height = 39
+        Top = 128
+        Width = 496
+        BorderSpacing.Around = 2
+        BorderSpacing.InnerBorder = 5
+        Color = clBtnShadow
+        EditLabel.Height = 39
+        EditLabel.Width = 104
+        EditLabel.Caption = 'Product Name:'
+        Font.Color = clSkyBlue
+        Font.Height = -13
+        Font.Name = 'Source Code Pro'
+        LabelPosition = lpLeft
+        ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 2
+        TextHint = 'ProductName'
+      end
+      object EdtOriginalFilename: TLabeledEdit
+        Left = 152
+        Height = 39
+        Top = 240
+        Width = 496
+        BorderSpacing.Around = 2
+        BorderSpacing.InnerBorder = 5
+        Color = clBtnShadow
+        EditLabel.Height = 39
+        EditLabel.Width = 144
+        EditLabel.Caption = 'Original Filename:'
+        Font.Color = clSkyBlue
+        Font.Height = -13
+        Font.Name = 'Source Code Pro'
+        LabelPosition = lpLeft
+        ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 3
+        TextHint = 'OriginalFilename'
+      end
+      object EdtInternalName: TLabeledEdit
+        Left = 152
+        Height = 39
+        Top = 296
+        Width = 496
+        BorderSpacing.Around = 2
+        BorderSpacing.InnerBorder = 5
+        Color = clBtnShadow
+        EditLabel.Height = 39
+        EditLabel.Width = 112
+        EditLabel.Caption = 'Internal Name:'
+        Font.Color = clSkyBlue
+        Font.Height = -13
+        Font.Name = 'Source Code Pro'
+        LabelPosition = lpLeft
+        ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 4
+        TextHint = 'InternalName'
+      end
+      object EdtProductVersion: TLabeledEdit
+        Left = 152
+        Height = 39
+        Top = 352
+        Width = 496
+        BorderSpacing.Around = 2
+        BorderSpacing.InnerBorder = 5
+        Color = clBtnShadow
+        EditLabel.Height = 39
+        EditLabel.Width = 128
+        EditLabel.Caption = 'Product Version:'
+        Font.Color = clSkyBlue
+        Font.Height = -13
+        Font.Name = 'Source Code Pro'
+        LabelPosition = lpLeft
+        ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 5
+        TextHint = 'ProductVersion'
+      end
+      object EdtFileVersion: TLabeledEdit
+        Left = 152
+        Height = 39
+        Top = 404
+        Width = 496
+        BorderSpacing.Around = 2
+        BorderSpacing.InnerBorder = 5
+        Color = clBtnShadow
+        EditLabel.Height = 39
+        EditLabel.Width = 104
+        EditLabel.Caption = 'File Version:'
+        Font.Color = clSkyBlue
+        Font.Height = -13
+        Font.Name = 'Source Code Pro'
+        LabelPosition = lpLeft
+        ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 6
+        TextHint = 'FileVersion'
+      end
+      object BtnRandInfo: TButton
+        Left = 150
+        Height = 50
+        Top = 456
+        Width = 500
+        Align = alBottom
+        BorderSpacing.Left = 150
+        BorderSpacing.Right = 10
+        BorderSpacing.Bottom = 14
+        Caption = 'GENERATE RANDOM'
+        Color = clHighlight
+        Font.Height = -16
+        Font.Name = 'Source Code Pro'
+        Font.Style = [fsBold]
+        ParentFont = False
+        TabOrder = 7
+        OnClick = BtnRandInfoClick
+      end
+      object EdtLegalCopyright: TLabeledEdit
+        Left = 152
+        Height = 39
+        Top = 184
+        Width = 496
+        BorderSpacing.Around = 2
+        BorderSpacing.InnerBorder = 5
+        Color = clBtnShadow
+        EditLabel.Height = 39
+        EditLabel.Width = 128
+        EditLabel.Caption = 'Legal Copyright:'
+        Font.Color = clSkyBlue
+        Font.Height = -13
+        Font.Name = 'Source Code Pro'
+        LabelPosition = lpLeft
+        ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 8
+        TextHint = 'Legal Copyright'
+      end
+    end
+    object TabSheet2: TTabSheet
+      Caption = 'Icon'
+      ClientHeight = 520
+      ClientWidth = 660
+      object GroupBox1: TGroupBox
+        Left = 140
+        Height = 180
+        Top = 120
+        Width = 380
+        Align = alBottom
+        BorderSpacing.Left = 140
+        BorderSpacing.Right = 140
+        BorderSpacing.Bottom = 220
+        Caption = 'Default Icon'
+        ClientHeight = 162
+        ClientWidth = 378
+        TabOrder = 0
+        object ImgDefaultIcon: TImage
+          Left = 10
+          Height = 142
+          Top = 10
+          Width = 358
+          Align = alClient
+          BorderSpacing.Left = 10
+          BorderSpacing.Top = 10
+          BorderSpacing.Right = 10
+          BorderSpacing.Bottom = 10
+          Center = True
+          Proportional = True
+          Stretch = True
+        end
+      end
+      object BtnChangeIcon: TButton
+        Left = 140
+        Height = 41
+        Top = 312
+        Width = 380
+        Caption = 'Change Icon'
+        TabOrder = 1
+        OnClick = BtnChangeIconClick
+      end
+      object Button1: TButton
+        Left = 140
+        Height = 32
+        Top = 368
+        Width = 380
+        Caption = 'Magick Icon (optimize)'
+        TabOrder = 2
+        OnClick = Button1Click
+      end
+    end
+  end
+  object OpenDialog1: TOpenDialog
+    Title = 'Escolher Icone'
+    Filter = 'Ícones (*.ico)|*.ico'
+    Left = 368
+    Top = 56
+  end
+end

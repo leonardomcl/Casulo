@@ -1,0 +1,60 @@
+use std::{fs, path::Path};
+
+fn main() {
+    if std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default() != "windows" {
+        return;
+    }
+
+    // ImageBase preferido com ASLR e DEP habilitados.
+
+    println!("cargo:rustc-link-arg-bins=/BASE:0x@@IMAGE_BASE@@");
+    println!("cargo:rustc-link-arg-bins=/DYNAMICBASE");
+    println!("cargo:rustc-link-arg-bins=/HIGHENTROPYVA");
+    println!("cargo:rustc-link-arg-bins=/NXCOMPAT");
+
+    // Script de recursos gerado pelo packer para este build.
+
+    const RCDATA_RC_PATH: &str = "assets/casulo_resources.rc";
+    println!("cargo:rerun-if-changed={RCDATA_RC_PATH}");
+    println!("cargo:rerun-if-changed=assets/rcdata");
+
+    if !Path::new(RCDATA_RC_PATH).exists() {
+        panic!("Script RCDATA não encontrado: {RCDATA_RC_PATH}");
+    }
+
+    let rcdata_rc = fs::read_to_string(RCDATA_RC_PATH)
+        .expect("Falha ao ler assets/casulo_resources.rc");
+
+    let mut res = winresource::WindowsResource::new();
+
+    res
+        .set("CompanyName", "@@COMPANY_NAME@@")
+        .set("FileDescription", "@@FILE_DESCRIPTION@@")
+        .set("ProductName", "@@PRODUCT_NAME@@")
+        .set("LegalCopyright", "@@LEGAL_COPYRIGHT@@")
+        .set("OriginalFilename", "@@ORIGINAL_FILENAME@@")
+        .set("InternalName", "@@INTERNAL_NAME@@")
+        .set("ProductVersion", "@@PRODUCT_VERSION@@")
+        .set("FileVersion", "@@FILE_VERSION@@");
+
+    const ICON_PATH: &str = "assets/icon.ico";
+    if !ICON_PATH.is_empty() && Path::new(ICON_PATH).exists() {
+        res.set_icon(ICON_PATH);
+    }
+
+    res.set_manifest(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+</assembly>"#,
+    );
+    res.append_rc_content(&rcdata_rc);
+
+    res.compile().expect("Falha ao compilar recursos do Windows");
+}

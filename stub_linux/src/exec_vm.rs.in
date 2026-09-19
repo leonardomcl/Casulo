@@ -1,0 +1,598 @@
+
+//! VM Linux gerada pelo packer. Opcodes, capacidades e bytecode variam a cada build.
+
+use core::sync::atomic::{compiler_fence, Ordering};
+
+
+// ISA injetada pelo packer.
+const OP_MOV_IMM: u8 = 0x@@OP_MOV_IMM@@;
+const OP_XOR_IMM: u8 = 0x@@OP_XOR_IMM@@;
+const OP_ADD_IMM: u8 = 0x@@OP_ADD_IMM@@;
+const OP_MUL_IMM: u8 = 0x@@OP_MUL_IMM@@;
+const OP_ROL_IMM: u8 = 0x@@OP_ROL_IMM@@;
+const OP_MIX_REG: u8 = 0x@@OP_MIX_REG@@;
+const OP_CMP_IMM: u8 = 0x@@OP_CMP_IMM@@;
+const OP_JNZ: u8 = 0x@@OP_JNZ@@;
+const OP_HOST_CALL: u8 = 0x@@OP_HOST_CALL@@;
+const OP_EMIT: u8 = 0x@@OP_EMIT@@;
+const OP_HALT: u8 = 0x@@OP_HALT@@;
+
+const SOP_LOAD_ENC: u8 = 0x@@SOP_LOAD_ENC@@;
+const SOP_LOAD_MASK: u8 = 0x@@SOP_LOAD_MASK@@;
+const SOP_LOAD_MIX: u8 = 0x@@SOP_LOAD_MIX@@;
+const SOP_XOR_REG: u8 = 0x@@SOP_XOR_REG@@;
+const SOP_STORE_OUT: u8 = 0x@@SOP_STORE_OUT@@;
+const SOP_INC_INDEX: u8 = 0x@@SOP_INC_INDEX@@;
+const SOP_CMP_INDEX: u8 = 0x@@SOP_CMP_INDEX@@;
+const SOP_JNZ: u8 = 0x@@SOP_JNZ@@;
+const SOP_HALT: u8 = 0x@@SOP_HALT@@;
+
+// Únicas capacidades expostas pela VM ao host.
+const HOST_VERIFY_GATE: u8 = 0x@@HOST_VERIFY_GATE@@;
+const HOST_EXECVEAT: u8 = 0x@@HOST_EXECVEAT@@;
+
+// Os programas permanecem cifrados até o momento de execução.
+const PROG_KEY: u64 = 0x@@PROG_KEY@@;
+const PROG_STRIDE: u64 = 0x@@PROG_STRIDE@@;
+const PROG_MUL: u64 = 0x@@PROG_MUL@@;
+
+const GATE_K1: u64 = 0x@@GATE_K1@@;
+const GATE_K2: u64 = 0x@@GATE_K2@@;
+const GATE_K3: u64 = 0x@@GATE_K3@@;
+const GATE_R1: u32 = @@GATE_R1@@;
+const GATE_R2: u32 = @@GATE_R2@@;
+const GATE_INIT_DELTA: u64 = 0x@@GATE_INIT_DELTA@@;
+
+const MIX_PROGRAM_LEN: usize = @@MIX_PROGRAM_LEN@@;
+static MIX_PROGRAM_ENC: [u8; MIX_PROGRAM_LEN] = [@@MIX_PROGRAM@@];
+
+const GATE_PROGRAM_LEN: usize = @@GATE_PROGRAM_LEN@@;
+static GATE_PROGRAM_ENC: [u8; GATE_PROGRAM_LEN] = [@@GATE_PROGRAM@@];
+
+const SECRET_PROGRAM_LEN: usize = @@SECRET_PROGRAM_LEN@@;
+static SECRET_PROGRAM_ENC: [u8; SECRET_PROGRAM_LEN] = [@@SECRET_PROGRAM@@];
+
+const REG_COUNT: usize = 4;
+const MIX_SIZE: usize = 32;
+const SECRET_SIZE: usize = 32;
+const SECRET_REG_COUNT: usize = 2;
+
+// Evita loops causados por bytecode inválido ou corrompido.
+const MAX_STEPS: usize = max_program_len() + 64;
+const SECRET_MAX_STEPS: usize = SECRET_SIZE * 16 + 32;
+
+const fn max_program_len() -> usize {
+    let a = if MIX_PROGRAM_LEN > GATE_PROGRAM_LEN {
+        MIX_PROGRAM_LEN
+    } else {
+        GATE_PROGRAM_LEN
+    };
+
+    if a > SECRET_PROGRAM_LEN {
+        a
+    } else {
+        SECRET_PROGRAM_LEN
+    }
+}
+
+#[inline(never)]
+fn wipe_bytes(data: &mut [u8]) {
+    for b in data {
+        unsafe { core::ptr::write_volatile(b, 0) };
+    }
+    compiler_fence(Ordering::SeqCst);
+}
+
+#[inline(never)]
+fn wipe_words(data: &mut [u64]) {
+    for w in data {
+        unsafe { core::ptr::write_volatile(w, 0) };
+    }
+    compiler_fence(Ordering::SeqCst);
+}
+
+#[inline(never)]
+fn keystream_byte(index: usize) -> u8 {
+    let mut x = PROG_KEY ^ (index as u64).wrapping_mul(PROG_STRIDE);
+    x ^= x >> 33;
+    x = x.wrapping_mul(PROG_MUL);
+    x ^= x >> 29;
+    (x & 0xFF) as u8
+}
+
+struct Code<const N: usize> {
+    buf: [u8; N],
+}
+
+impl<const N: usize> Code<N> {
+    fn decrypt(enc: &[u8; N]) -> Self {
+        let mut buf = [0u8; N];
+        let mut i = 0usize;
+
+        while i < N {
+            buf[i] = enc[i] ^ keystream_byte(i);
+            i += 1;
+        }
+
+        Self { buf }
+    }
+}
+
+impl<const N: usize> Drop for Code<N> {
+    fn drop(&mut self) {
+        wipe_bytes(&mut self.buf);
+    }
+}
+
+
+// O interpretador só interage com o sistema através deste host fechado.
+trait Host {
+    fn call(&mut self, id: u8, regs: &mut [u64; REG_COUNT]) -> Result<(), ()>;
+}
+
+struct NullHost;
+
+impl Host for NullHost {
+    fn call(&mut self, _id: u8, _regs: &mut [u64; REG_COUNT]) -> Result<(), ()> {
+        Err(())
+    }
+}
+
+struct LinuxGateHost<F>
+where
+    F: FnOnce() -> isize,
+{
+    expected: u64,
+    delta: u64,
+    execveat: Option<F>,
+}
+
+impl<F> Host for LinuxGateHost<F>
+where
+    F: FnOnce() -> isize,
+{
+    fn call(&mut self, id: u8, regs: &mut [u64; REG_COUNT]) -> Result<(), ()> {
+        match id {
+            HOST_VERIFY_GATE => {
+                self.delta = regs[0] ^ self.expected;
+                regs[0] = if self.delta == 0 { 1 } else { 0 };
+                Ok(())
+            }
+
+            HOST_EXECVEAT => {
+                if self.delta != 0 {
+                    return Err(());
+                }
+
+                let exec = self.execveat.take().ok_or(())?;
+                let ret = exec();
+                regs[0] = ret as i64 as u64;
+                Ok(())
+            }
+
+            _ => Err(()),
+        }
+    }
+}
+
+impl<F> Drop for LinuxGateHost<F>
+where
+    F: FnOnce() -> isize,
+{
+    fn drop(&mut self) {
+        unsafe {
+            core::ptr::write_volatile(&mut self.expected, 0);
+            core::ptr::write_volatile(&mut self.delta, GATE_INIT_DELTA);
+        }
+        compiler_fence(Ordering::SeqCst);
+    }
+}
+
+
+struct Vm<'a, H>
+where
+    H: Host,
+{
+    code: &'a [u8],
+    ip: usize,
+    regs: [u64; REG_COUNT],
+    zero: bool,
+    out: [u8; MIX_SIZE],
+    emitted: bool,
+    host: H,
+}
+
+impl<'a, H> Drop for Vm<'a, H>
+where
+    H: Host,
+{
+    fn drop(&mut self) {
+        wipe_words(&mut self.regs);
+        wipe_bytes(&mut self.out);
+    }
+}
+
+impl<'a, H> Vm<'a, H>
+where
+    H: Host,
+{
+    fn new(code: &'a [u8], host: H) -> Self {
+        Self {
+            code,
+            ip: 0,
+            regs: [0u64; REG_COUNT],
+            zero: true,
+            out: [0u8; MIX_SIZE],
+            emitted: false,
+            host,
+        }
+    }
+
+    #[inline]
+    fn read_u8(&mut self) -> Result<u8, ()> {
+        let v = *self.code.get(self.ip).ok_or(())?;
+        self.ip = self.ip.checked_add(1).ok_or(())?;
+        Ok(v)
+    }
+
+    #[inline]
+    fn read_u16(&mut self) -> Result<u16, ()> {
+        let b0 = self.read_u8()?;
+        let b1 = self.read_u8()?;
+        Ok(u16::from_le_bytes([b0, b1]))
+    }
+
+    #[inline]
+    fn read_u64(&mut self) -> Result<u64, ()> {
+        let end = self.ip.checked_add(8).ok_or(())?;
+        let src = self.code.get(self.ip..end).ok_or(())?;
+        let mut b = [0u8; 8];
+        b.copy_from_slice(src);
+        self.ip = end;
+        Ok(u64::from_le_bytes(b))
+    }
+
+    #[inline]
+    fn reg_index(&mut self) -> Result<usize, ()> {
+        let r = self.read_u8()? as usize;
+        if r >= REG_COUNT {
+            return Err(());
+        }
+        Ok(r)
+    }
+
+    #[inline]
+    fn rot_amount(&mut self) -> Result<u32, ()> {
+        let bits = self.read_u8()? as u32;
+        if bits == 0 || bits >= 64 {
+            return Err(());
+        }
+        Ok(bits)
+    }
+
+    fn run(&mut self) -> Result<isize, ()> {
+        let mut steps = 0usize;
+
+        loop {
+            steps = steps.checked_add(1).ok_or(())?;
+            if steps > MAX_STEPS {
+                return Err(());
+            }
+
+            let op = self.read_u8()?;
+
+            match op {
+                OP_MOV_IMM => {
+                    let r = self.reg_index()?;
+                    self.regs[r] = self.read_u64()?;
+                }
+
+                OP_XOR_IMM => {
+                    let r = self.reg_index()?;
+                    let imm = self.read_u64()?;
+                    self.regs[r] ^= imm;
+                }
+
+                OP_ADD_IMM => {
+                    let r = self.reg_index()?;
+                    let imm = self.read_u64()?;
+                    self.regs[r] = self.regs[r].wrapping_add(imm);
+                }
+
+                OP_MUL_IMM => {
+                    let r = self.reg_index()?;
+                    let imm = self.read_u64()?;
+
+                    if imm & 1 == 0 {
+                        return Err(());
+                    }
+
+                    self.regs[r] = self.regs[r].wrapping_mul(imm);
+                }
+
+                OP_ROL_IMM => {
+                    let r = self.reg_index()?;
+                    let bits = self.rot_amount()?;
+                    self.regs[r] = self.regs[r].rotate_left(bits);
+                }
+
+                OP_MIX_REG => {
+                    let dst = self.reg_index()?;
+                    let src = self.reg_index()?;
+                    let bits = self.rot_amount()?;
+                    self.regs[dst] ^= self.regs[src].rotate_left(bits);
+                }
+
+                OP_CMP_IMM => {
+                    let r = self.reg_index()?;
+                    let imm = self.read_u64()?;
+                    self.zero = self.regs[r] == imm;
+                }
+
+                OP_JNZ => {
+                    let target = self.read_u16()? as usize;
+
+                    if !self.zero {
+                        if target >= self.code.len() {
+                            return Err(());
+                        }
+                        self.ip = target;
+                    }
+                }
+
+                OP_HOST_CALL => {
+                    let id = self.read_u8()?;
+                    self.host.call(id, &mut self.regs)?;
+                }
+
+                OP_EMIT => {
+                    if self.emitted {
+                        return Err(());
+                    }
+
+                    let mut i = 0usize;
+                    while i < REG_COUNT {
+                        let b = self.regs[i].to_le_bytes();
+                        self.out[i * 8..i * 8 + 8].copy_from_slice(&b);
+                        i += 1;
+                    }
+
+                    self.emitted = true;
+                }
+
+                OP_HALT => {
+                    return Ok(self.regs[0] as i64 as isize);
+                }
+
+                _ => return Err(()),
+            }
+        }
+    }
+}
+
+
+// Interpretador pequeno usado apenas para reconstruir o Secret.
+struct SecretVm<'a> {
+    code: &'a [u8],
+    ip: usize,
+    regs: [u8; SECRET_REG_COUNT],
+    index: usize,
+    zero: bool,
+
+    enc: &'a [u8; SECRET_SIZE],
+    mask: &'a [u8; SECRET_SIZE],
+    mix: &'a [u8; SECRET_SIZE],
+
+    output: [u8; SECRET_SIZE],
+}
+
+impl<'a> Drop for SecretVm<'a> {
+    fn drop(&mut self) {
+        wipe_bytes(&mut self.output);
+        wipe_bytes(&mut self.regs);
+    }
+}
+
+impl<'a> SecretVm<'a> {
+    fn new(
+        code: &'a [u8],
+        enc: &'a [u8; SECRET_SIZE],
+        mask: &'a [u8; SECRET_SIZE],
+        mix: &'a [u8; SECRET_SIZE],
+    ) -> Self {
+        Self {
+            code,
+            ip: 0,
+            regs: [0u8; SECRET_REG_COUNT],
+            index: 0,
+            zero: true,
+            enc,
+            mask,
+            mix,
+            output: [0u8; SECRET_SIZE],
+        }
+    }
+
+    #[inline]
+    fn read_u8(&mut self) -> Result<u8, ()> {
+        let v = *self.code.get(self.ip).ok_or(())?;
+        self.ip = self.ip.checked_add(1).ok_or(())?;
+        Ok(v)
+    }
+
+    #[inline]
+    fn read_u16(&mut self) -> Result<u16, ()> {
+        let b0 = self.read_u8()?;
+        let b1 = self.read_u8()?;
+        Ok(u16::from_le_bytes([b0, b1]))
+    }
+
+    #[inline]
+    fn reg_index(&mut self) -> Result<usize, ()> {
+        let r = self.read_u8()? as usize;
+
+        if r >= SECRET_REG_COUNT {
+            return Err(());
+        }
+
+        Ok(r)
+    }
+
+    #[inline]
+    fn current_index(&self) -> Result<usize, ()> {
+        if self.index >= SECRET_SIZE {
+            return Err(());
+        }
+
+        Ok(self.index)
+    }
+
+    fn run(&mut self, out: &mut [u8; SECRET_SIZE]) -> Result<(), ()> {
+        let mut steps = 0usize;
+
+        loop {
+            steps = steps.checked_add(1).ok_or(())?;
+
+            if steps > SECRET_MAX_STEPS {
+                return Err(());
+            }
+
+            let op = self.read_u8()?;
+
+            match op {
+                SOP_LOAD_ENC => {
+                    let r = self.reg_index()?;
+                    let i = self.current_index()?;
+                    self.regs[r] = self.enc[i];
+                }
+
+                SOP_LOAD_MASK => {
+                    let r = self.reg_index()?;
+                    let i = self.current_index()?;
+                    self.regs[r] = self.mask[i];
+                }
+
+                SOP_LOAD_MIX => {
+                    let r = self.reg_index()?;
+                    let i = self.current_index()?;
+                    self.regs[r] = self.mix[i];
+                }
+
+                SOP_XOR_REG => {
+                    let dst = self.reg_index()?;
+                    let src = self.reg_index()?;
+                    self.regs[dst] ^= self.regs[src];
+                }
+
+                SOP_STORE_OUT => {
+                    let r = self.reg_index()?;
+                    let i = self.current_index()?;
+                    self.output[i] = self.regs[r];
+                }
+
+                SOP_INC_INDEX => {
+                    self.index = self.index.checked_add(1).ok_or(())?;
+
+                    if self.index > SECRET_SIZE {
+                        return Err(());
+                    }
+                }
+
+                SOP_CMP_INDEX => {
+                    let expected = self.read_u8()? as usize;
+                    self.zero = self.index == expected;
+                }
+
+                SOP_JNZ => {
+                    let target = self.read_u16()? as usize;
+
+                    if !self.zero {
+                        if target >= self.code.len() {
+                            return Err(());
+                        }
+
+                        self.ip = target;
+                    }
+                }
+
+                SOP_HALT => {
+                    if self.index != SECRET_SIZE {
+                        return Err(());
+                    }
+
+                    out.copy_from_slice(&self.output);
+                    return Ok(());
+                }
+
+                _ => return Err(()),
+            }
+        }
+    }
+}
+
+
+#[inline(never)]
+// API usada pelo loader para derivação, reconstrução do Secret e gate final.
+pub fn derive_mix(
+    seed: &[u8; MIX_SIZE],
+    out: &mut [u8; MIX_SIZE],
+) -> Result<(), ()> {
+    let code = Code::<MIX_PROGRAM_LEN>::decrypt(&MIX_PROGRAM_ENC);
+    let mut vm = Vm::new(&code.buf, NullHost);
+
+    let mut i = 0usize;
+
+    while i < REG_COUNT {
+        let mut b = [0u8; 8];
+        b.copy_from_slice(&seed[i * 8..i * 8 + 8]);
+        vm.regs[i] = u64::from_le_bytes(b);
+        i += 1;
+    }
+
+    vm.run()?;
+
+    if !vm.emitted {
+        return Err(());
+    }
+
+    out.copy_from_slice(&vm.out);
+    Ok(())
+}
+
+#[inline(never)]
+pub fn decode_secret(
+    enc: &[u8; SECRET_SIZE],
+    mask: &[u8; SECRET_SIZE],
+    mix: &[u8; SECRET_SIZE],
+    out: &mut [u8; SECRET_SIZE],
+) -> Result<(), ()> {
+    let code = Code::<SECRET_PROGRAM_LEN>::decrypt(&SECRET_PROGRAM_ENC);
+    let mut vm = SecretVm::new(&code.buf, enc, mask, mix);
+    vm.run(out)
+}
+
+#[inline(never)]
+fn gate_state(token: u64) -> u64 {
+    ((token ^ GATE_K1)
+        .rotate_left(GATE_R1)
+        .wrapping_add(GATE_K2)
+        ^ GATE_K3)
+        .rotate_left(GATE_R2)
+}
+
+pub fn execute<F>(token: u64, host_execveat: F) -> Result<isize, ()>
+where
+    F: FnOnce() -> isize,
+{
+    let code = Code::<GATE_PROGRAM_LEN>::decrypt(&GATE_PROGRAM_ENC);
+
+    let host = LinuxGateHost {
+        expected: gate_state(token),
+        delta: GATE_INIT_DELTA,
+        execveat: Some(host_execveat),
+    };
+
+    let mut vm = Vm::new(&code.buf, host);
+    vm.regs[0] = token;
+    vm.run()
+}

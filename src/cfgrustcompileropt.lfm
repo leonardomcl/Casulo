@@ -1,0 +1,94 @@
+object FRustCmpOpt: TFRustCmpOpt
+  Left = 646
+  Height = 325
+  Top = 295
+  Width = 371
+  BorderIcons = [biSystemMenu]
+  BorderStyle = bsToolWindow
+  Caption = 'Rust Compiler Options'
+  ClientHeight = 325
+  ClientWidth = 371
+  PopupMode = pmAuto
+  Position = poDesktopCenter
+  LCLVersion = '4.8.0.0'
+  OnClose = FormClose
+  object lto: TLabel
+    Left = 56
+    Height = 21
+    Top = 32
+    Width = 40
+    Caption = 'lto:'
+    Font.Height = -16
+    Font.Name = 'Source Code Pro'
+    Font.Style = [fsBold]
+    ParentFont = False
+  end
+  object RbLtoTrue: TRadioButton
+    Left = 126
+    Height = 24
+    Top = 32
+    Width = 62
+    Caption = 'TRUE'
+    Checked = True
+    Font.Height = -15
+    Font.Name = 'Source Code Pro'
+    ParentFont = False
+    TabOrder = 0
+    TabStop = True
+  end
+  object RbLtoFalse: TRadioButton
+    Left = 230
+    Height = 24
+    Top = 32
+    Width = 71
+    Caption = 'FALSE'
+    Font.Height = -15
+    Font.Name = 'Source Code Pro'
+    ParentFont = False
+    TabOrder = 1
+  end
+  object StatusBar1: TStatusBar
+    Left = 0
+    Height = 21
+    Top = 304
+    Width = 371
+    Panels = <>
+  end
+  object GroupBox1: TGroupBox
+    Left = 0
+    Height = 224
+    Top = 80
+    Width = 371
+    Align = alBottom
+    Caption = 'OPT-LEVEL'
+    ClientHeight = 203
+    ClientWidth = 369
+    Font.Height = -15
+    Font.Name = 'Source Code Pro'
+    ParentFont = False
+    TabOrder = 3
+    object ListBox1: TListBox
+      Left = 8
+      Height = 187
+      Top = 8
+      Width = 353
+      Align = alClient
+      BorderSpacing.Left = 8
+      BorderSpacing.Top = 8
+      BorderSpacing.Right = 8
+      BorderSpacing.Bottom = 8
+      BorderStyle = bsNone
+      Items.Strings = (
+        '0'
+        '1'
+        '2'
+        '3'
+        '"s"'
+        '"z"'
+      )
+      ItemHeight = 26
+      ItemIndex = 5
+      TabOrder = 0
+    end
+  end
+end

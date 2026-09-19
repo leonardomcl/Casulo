@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectSession>
+    <Version Value="12"/>
+    <BuildModes Active="Release">
+      <Item Name="Release">
+        <CompilerOptions>
+          <Version Value="11"/>
+          <Target>
+            <Filename Value="../bin/Casulo"/>
+          </Target>
+          <SearchPaths>
+            <IncludeFiles Value="$(ProjOutDir)"/>
+            <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
+          </SearchPaths>
+          <CodeGeneration>
+            <SmartLinkUnit Value="True"/>
+            <Optimizations>
+              <OptimizationLevel Value="4"/>
+            </Optimizations>
+          </CodeGeneration>
+          <Linking>
+            <Debugging>
+              <GenerateDebugInfo Value="False"/>
+              <RunWithoutDebug Value="True"/>
+              <StripSymbols Value="True"/>
+            </Debugging>
+            <LinkSmart Value="True"/>
+            <Options>
+              <Win32>
+                <GraphicApplication Value="True"/>
+              </Win32>
+            </Options>
+          </Linking>
+        </CompilerOptions>
+      </Item>
+    </BuildModes>
+    <Units>
+      <Unit>
+        <Filename Value="Casulo.lpr"/>
+        <IsPartOfProject Value="True"/>
+        <EditorIndex Value="4"/>
+        <TopLine Value="3"/>
+        <CursorPos Y="16"/>
+        <UsageCount Value="143"/>
+        <Loaded Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="principal.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="FPrincipal"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <UnitName Value="Principal"/>
+        <CursorPos X="3" Y="654"/>
+        <UsageCount Value="143"/>
+        <Loaded Value="True"/>
+        <LoadedDesigner Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="requeriments.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Requeriments"/>
+        <EditorIndex Value="-1"/>
+        <CursorPos X="13" Y="11"/>
+        <UsageCount Value="140"/>
+      </Unit>
+      <Unit>
+        <Filename Value="reswindows.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="FResWindows"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="45"/>
+        <CursorPos X="14" Y="45"/>
+        <UsageCount Value="139"/>
+      </Unit>
+      <Unit>
+        <Filename Value="compresscfg.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="FConfigCprsAlgo"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <EditorIndex Value="-1"/>
+        <CursorPos X="75" Y="8"/>
+        <UsageCount Value="130"/>
+      </Unit>
+      <Unit>
+        <Filename Value="cfgimgbasewin.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="FImageBaseWin"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="141"/>
+        <CursorPos X="49" Y="74"/>
+        <FoldState Value=" T3g0JL"/>
+        <UsageCount Value="130"/>
+      </Unit>
+      <Unit>
+        <Filename Value="chkzcfg.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="FChkSizeCfg"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="6"/>
+        <CursorPos X="53" Y="36"/>
+        <UsageCount Value="127"/>
+      </Unit>
+      <Unit>
+        <Filename Value="cfgrustcompileropt.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="FRustCmpOpt"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="10"/>
+        <CursorPos X="17" Y="36"/>
+        <UsageCount Value="122"/>
+      </Unit>
+      <Unit>
+        <Filename Value="cfgtargetlinux.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="FTargetLinux"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <EditorIndex Value="6"/>
+        <CursorPos Y="18"/>
+        <UsageCount Value="93"/>
+        <Loaded Value="True"/>
+        <LoadedDesigner Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="casulolinuxvm.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="CasuloLinuxVm"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="661"/>
+        <CursorPos X="19"/>
+        <UsageCount Value="92"/>
+      </Unit>
+      <Unit>
+        <Filename Value="about.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="FrmAbout"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <EditorIndex Value="5"/>
+        <TopLine Value="9"/>
+        <CursorPos X="5" Y="38"/>
+        <UsageCount Value="89"/>
+        <Loaded Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="packer.pas"/>
+        <UnitName Value="Packer"/>
+        <EditorIndex Value="-1"/>
+        <CursorPos X="3" Y="9"/>
+        <UsageCount Value="69"/>
+      </Unit>
+      <Unit>
+        <Filename Value="casulocommon.pas"/>
+        <UnitName Value="CasuloCommon"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="565"/>
+        <CursorPos X="41" Y="578"/>
+        <UsageCount Value="70"/>
+      </Unit>
+      <Unit>
+        <Filename Value="casulolinuxpipeline.pas"/>
+        <UnitName Value="CasuloLinuxPipeline"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="293"/>
+        <CursorPos X="19" Y="317"/>
+        <UsageCount Value="53"/>
+      </Unit>
+      <Unit>
+        <Filename Value="casuloconfig.pas"/>
+        <UnitName Value="CasuloConfig"/>
+        <EditorIndex Value="2"/>
+        <TopLine Value="175"/>
+        <CursorPos Y="209"/>
+        <UsageCount Value="70"/>
+        <Loaded Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="casulowindows.pas"/>
+        <UnitName Value="CasuloWindows"/>
+        <IsVisibleTab Value="True"/>
+        <EditorIndex Value="3"/>
+        <CursorPos X="55" Y="9"/>
+        <UsageCount Value="69"/>
+        <Loaded Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="casulowindowspipeline.pas"/>
+        <UnitName Value="CasuloWindowsPipeline"/>
+        <EditorIndex Value="1"/>
+        <TopLine Value="486"/>
+        <CursorPos X="39" Y="394"/>
+        <UsageCount Value="69"/>
+        <Loaded Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="peutils.pas"/>
+        <UnitName Value="PEUtils"/>
+        <EditorIndex Value="-1"/>
+        <CursorPos X="4" Y="27"/>
+        <UsageCount Value="24"/>
+      </Unit>
+      <Unit>
+        <Filename Value="windowsversioninfo.pas"/>
+        <UnitName Value="WindowsVersionInfo"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="25"/>
+        <CursorPos X="24"/>
+        <UsageCount Value="5"/>
+      </Unit>
+      <Unit>
+        <Filename Value="principal.lfm"/>
+        <EditorIndex Value="-1"/>
+        <UsageCount Value="46"/>
+        <DefaultSyntaxHighlighter Value="LFM"/>
+      </Unit>
+    </Units>
+    <JumpHistory HistoryIndex="29">
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="413" Column="3" TopLine="380"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="412" Column="3" TopLine="379"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="413" Column="3" TopLine="380"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="414" Column="3" TopLine="381"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="360" Column="3" TopLine="355"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="243" Column="5" TopLine="215"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="237" Column="7" TopLine="220"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="469" Column="11" TopLine="441"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="133" Column="46" TopLine="114"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="556" Column="5" TopLine="523"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="230" Column="42" TopLine="207"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="504" TopLine="49"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="705" Column="5" TopLine="680"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="923" Column="5" TopLine="893"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="618" Column="22" TopLine="592"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="36" Column="33" TopLine="25"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="120" Column="65" TopLine="104"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="109" Column="28" TopLine="88"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="654" Column="3" TopLine="651"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="653" Column="3" TopLine="650"/>
+      </Position>
+      <Position>
+        <Filename Value="principal.pas"/>
+        <Caret Line="654" Column="3"/>
+      </Position>
+      <Position>
+        <Filename Value="casulowindowspipeline.pas"/>
+        <Caret Line="394" Column="45"/>
+      </Position>
+      <Position>
+        <Filename Value="casulowindows.pas"/>
+        <Caret Line="25" Column="49" TopLine="10"/>
+      </Position>
+      <Position>
+        <Filename Value="casulowindows.pas"/>
+        <Caret Line="594" Column="38" TopLine="577"/>
+      </Position>
+      <Position>
+        <Filename Value="casulowindows.pas"/>
+        <Caret Line="1376" Column="54" TopLine="1358"/>
+      </Position>
+      <Position>
+        <Filename Value="casulowindows.pas"/>
+        <Caret Line="1812" Column="47" TopLine="1784"/>
+      </Position>
+      <Position>
+        <Filename Value="casulowindows.pas"/>
+        <Caret Line="1826" Column="47" TopLine="1808"/>
+      </Position>
+      <Position>
+        <Filename Value="casuloconfig.pas"/>
+        <Caret Line="16" Column="33"/>
+      </Position>
+      <Position>
+        <Filename Value="casuloconfig.pas"/>
+        <Caret Line="197" Column="34" TopLine="172"/>
+      </Position>
+      <Position>
+        <Filename Value="casuloconfig.pas"/>
+        <Caret Line="209" TopLine="175"/>
+      </Position>
+    </JumpHistory>
+    <RunParams>
+      <FormatVersion Value="2"/>
+      <Modes ActiveMode=""/>
+    </RunParams>
+  </ProjectSession>
+</CONFIG>

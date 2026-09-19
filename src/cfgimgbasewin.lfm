@@ -1,0 +1,85 @@
+object FImageBaseWin: TFImageBaseWin
+  Left = 711
+  Height = 199
+  Top = 245
+  Width = 349
+  BorderIcons = [biSystemMenu]
+  BorderStyle = bsToolWindow
+  Caption = 'Imagebase (Windows)'
+  ClientHeight = 199
+  ClientWidth = 349
+  PopupMode = pmAuto
+  Position = poDesktopCenter
+  LCLVersion = '4.8.0.0'
+  OnClose = FormClose
+  object RbImgBasTrue: TRadioButton
+    Left = 176
+    Height = 24
+    Top = 24
+    Width = 62
+    Caption = 'True'
+    Font.Height = -15
+    Font.Name = 'Source Code Pro'
+    ParentFont = False
+    TabOrder = 0
+    OnClick = RbImgBasTrueClick
+  end
+  object Label1: TLabel
+    Left = 16
+    Height = 20
+    Top = 24
+    Width = 153
+    Caption = 'RANDOM IMAGEBASE:'
+    Font.Height = -15
+    Font.Name = 'Source Code Pro'
+    Font.Style = [fsBold]
+    ParentFont = False
+  end
+  object RbImgBasFalse: TRadioButton
+    Left = 256
+    Height = 24
+    Top = 24
+    Width = 71
+    Caption = 'False'
+    Checked = True
+    Font.Height = -15
+    Font.Name = 'Source Code Pro'
+    ParentFont = False
+    TabOrder = 1
+    TabStop = True
+    OnClick = RbImgBasFalseClick
+  end
+  object EdtDeftImgBase: TLabeledEdit
+    Left = 16
+    Height = 33
+    Top = 96
+    Width = 311
+    EditLabel.Height = 19
+    EditLabel.Width = 311
+    EditLabel.Caption = 'Default Imagebase:'
+    Font.Color = clMoneyGreen
+    Font.Height = -16
+    Font.Name = 'Source Code Pro'
+    ParentFont = False
+    TabOrder = 2
+    Text = '$0000009332140000'
+  end
+  object BtnValidateImgBase: TToggleBox
+    Left = 198
+    Height = 34
+    Top = 136
+    Width = 129
+    Caption = 'Validate'
+    TabOrder = 3
+    OnChange = BtnValidateImgBaseChange
+  end
+  object ChangerndImageBase: TToggleBox
+    Left = 16
+    Height = 34
+    Top = 136
+    Width = 129
+    Caption = 'Random'
+    TabOrder = 4
+    OnChange = ChangerndImageBaseChange
+  end
+end
