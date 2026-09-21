@@ -1,5 +1,10 @@
 # Casulo
 
+
+<img width="840" height="554" alt="casulogui" src="https://github.com/user-attachments/assets/59e204e3-0f68-453b-932c-3800a80adfd9" />
+
+
+
 Casulo é um empacotador e protetor de binários para **Windows** e **Linux**, desenvolvido principalmente em **Free Pascal/Lazarus** e **Rust**.
 
 O projeto cria um container autenticado para a aplicação original, aplica compressão e criptografia por build e utiliza um stub específico para cada plataforma para validar, reconstruir e iniciar o executável protegido.
@@ -8,20 +13,26 @@ O projeto cria um container autenticado para a aplicação original, aplica comp
 
 ## Principais recursos
 
-- suporte a executáveis Windows PE64 e Linux ELF64;
-- compressão com **Zstandard** ou **Brotli**;
-- criptografia **AES-256-CBC**;
-- derivação de chaves com **HKDF-SHA256**;
-- autenticação de metadados e chunks com **HMAC-SHA256**;
-- container fragmentado com valores diversificados a cada build;
-- Stub Windows em Rust;
-- Stub Linux `no_std` em Rust;
-- recursos `RCDATA` para armazenamento dos fragmentos no Windows;
-- execução em memória no Windows quando o PE é compatível;
-- fallback convencional em disco para executáveis Windows que exigem recursos não suportados pelo mapper;
-- execução Linux através de `memfd`/`execveat`;
-- suporte a metadados de versão e ícone no executável Windows;
-- opções de otimização do compilador Rust configuráveis pelo packer.
+* suporte a executáveis **Windows PE64** e **Linux ELF64**;
+* compressão com **Zstandard** ou **Brotli**;
+* criptografia **AES-256-CBC**;
+* derivação de chaves com **HKDF-SHA256**;
+* autenticação de metadados e chunks com **HMAC-SHA256**;
+* container fragmentado com valores, identificadores e parâmetros diversificados a cada build;
+* **VM interna diversificada por build**, utilizada na derivação de material criptográfico e no controle das etapas finais de execução;
+* opcodes, constantes, programas internos e parâmetros da VM regenerados durante o empacotamento;
+* Stub Windows desenvolvido em **Rust**;
+* Stub Linux desenvolvido em **Rust `no_std`**, sem dependência da libc;
+* recursos **RCDATA** para armazenamento fragmentado do container no executável Windows;
+* execução em memória no Windows quando o PE é compatível com o mapper;
+* suporte a relocations, resolução de imports, proteções de memória e tabelas de unwind no mapper PE64;
+* **demand paging opcional no Windows**, mantendo páginas executáveis protegidas e disponibilizando-as sob demanda durante a execução;
+* fallback convencional em disco para executáveis Windows que utilizam recursos não suportados pelo mapper;
+* execução Linux utilizando **`memfd` + `execveat`**, evitando a necessidade de criar um executável permanente em disco;
+* limpeza de buffers contendo material criptográfico e payloads intermediários após o uso;
+* suporte a metadados de versão e ícone no executável Windows;
+* opções de otimização do compilador Rust configuráveis pelo packer.
+
 
 ## Estrutura do projeto
 
